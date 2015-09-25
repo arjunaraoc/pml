@@ -1,0 +1,82 @@
+---
+title: "Activity quality recognition"
+author: "Arjuna Rao C"
+date: "September 25, 2015"
+output: html_document
+---
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+
+##read and clean data
+```{r,cache=FALSE}
+library(caret)
+library(doMC)
+registerDoMC(cores=2)
+training<-read.csv("pml-training.csv",header=TRUE,na.strings=c("NA",""))
+testing<-read.csv("pml-testing.csv",header=TRUE,na.strings=c("NA",""))
+training<-training[,8:160]
+testing <-testing [,8:160]
+#remove mostly NA columns
+NAcolindex<-apply(!is.na(training),2,sum) >19621
+training1<-training[,NAcolindex]
+testing1<-testing[,NAcolindex]
+#remove DIVBY0 rows
+training1<-training1[apply(training1, 1, function(x) !any(x == '#DIV/0!')), ] 
+dim(training1)
+```
+
+
+##preProcessing
+```{r, cache=TRUE}
+#check near zero variance predictors
+nzvtr1<-nzv(training1,saveMetrics = TRUE)
+summary(nzvtr1)
+#None of the variables have near zero variance
+```
+
+## create training, test datasets
+```{r, cache=TRUE}
+##Create training and test sets from the initial training dataset
+set.seed(1234)
+inTrain<-createDataPartition(training1$classe,p=0.75,list=FALSE)
+trnset<-training1[inTrain,]
+tstset<-training1[-inTrain,]
+```
+
+##Check correlation between columns
+```{r, cache=TRUE}
+dim(trnset)
+cormat<-cor(trnset[,-53])
+#identify predictors which are correlated by more than 0.9
+highCorrDescr <- findCorrelation(cormat,cutoff=0.9)
+trnset<-trnset[,-highCorrDescr]
+#dimenstions after removing the highly correlated descriptors
+dim(trnset)
+tstset<-tstset[,-highCorrDescr]
+```
+
+##lda model fit
+```{r,cache=TRUE}
+ldaFit<-train(classe~.,data=trnset,method="lda")
+print(ldaFit)
+confusionMatrix(predict(ldaFit,newdata=tstset),tstset$classe)
+```
+##rf model fit
+```{r,cache=TRUE}
+#Sys.time()
+#read from precomputed file, 
+#it took 8:50 hours on 
+#Intel® Core™2 Duo CPU E7200 @ 2.53GHz × 2 -32 bit ubuntu system with 2 GB memory, with
+#parallel processing enabled for 14K rows and 48 predictors 
+#with 25 bootstrap samples and mtry 3
+#with 10 bootstrap samples it took only 36 minutes
+#set.seed(1234)
+#rfFit<-train(classe~.,data=trnset,method="rf",trControl=trainControl(method="boot",number=10))
+#save(rfFit,file="rfFit.precomputed")
+#Sys.time()
+load("rfFit.precomputed")
+print(rfFit)
+confusionMatrix(predict(rfFit,newdata=tstset),tstset$classe)
+```
+
