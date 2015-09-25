@@ -1,14 +1,18 @@
 ---
 title: "Activity quality recognition"
 author: "Arjuna Rao C"
-date: "September 25, 2015"
+date: "September 26, 2015"
 output: html_document
 ---
+##Executive Summary
+Weight Lifting Exercises Dataset is used for assessing the performance of various machine learning algorithms. In our study random forest algorithm provided better performance than linear discriminant analysis algorithm. The report highlights the various steps for applying machine learning algorithms   
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
 
 
-##read and clean data
+##Data Set
+Velloso E et.al [1] explored the use of human activity data for identifying the proper way of doing activity. They considered a simple weight lifting activity with one correct way and four incorrect ways. Participants were instrumented with 9 DOF sensors on belt, forearm, arm. The dumb bell was also instrumented with 9 DOF sensor. Raw Data from these sensors was captured. various statistical features such as mean, standard deviation, kutosis were computed for small windows of activity duration with 0.5 second overlap. Physical features representing the physical motion were also computed.
+
+
 ```{r,cache=FALSE}
 library(caret)
 library(doMC)
@@ -25,17 +29,18 @@ testing1<-testing[,NAcolindex]
 training1<-training1[apply(training1, 1, function(x) !any(x == '#DIV/0!')), ] 
 dim(training1)
 ```
+From exploring the data, the first 8 predictors provide information about the participant, time stamps and sequence numbers. These are dropped from the data. Similarly the columns which consist of NAs were dropped. This leads to 53 variates from the original set of 160 variates. We also removed the samples which had Division by zero errors for any variate.
 
-
-##preProcessing
+##Pre Processing
 ```{r, cache=TRUE}
 #check near zero variance predictors
 nzvtr1<-nzv(training1,saveMetrics = TRUE)
 summary(nzvtr1)
 #None of the variables have near zero variance
 ```
+We tried to find predictors with near zero variance, so that they can be left out from the model. We found none that could be dropped.
 
-## create training, test datasets
+## Create training, test datasets
 ```{r, cache=TRUE}
 ##Create training and test sets from the initial training dataset
 set.seed(1234)
@@ -43,6 +48,7 @@ inTrain<-createDataPartition(training1$classe,p=0.75,list=FALSE)
 trnset<-training1[inTrain,]
 tstset<-training1[-inTrain,]
 ```
+Training and Testing datasets were created with 75:25 proportion resulting in 14718 samples for training and 4904 samples for testing(hold out data).
 
 ##Check correlation between columns
 ```{r, cache=TRUE}
@@ -55,14 +61,17 @@ trnset<-trnset[,-highCorrDescr]
 dim(trnset)
 tstset<-tstset[,-highCorrDescr]
 ```
+Highly correlated variates were identified and they were dropped from the dataset.The variates have been reduced to 46.
 
-##lda model fit
+##Linear Discriminant Analysis Model
 ```{r,cache=TRUE}
 ldaFit<-train(classe~.,data=trnset,method="lda")
 print(ldaFit)
 confusionMatrix(predict(ldaFit,newdata=tstset),tstset$classe)
 ```
-##rf model fit
+LDA is an example of model based prediction. It assumes that variates are gaussian distributed and their covariance is same for each class. This method provided in sample accuracy of 67.5%, with 3 sigma bounds as 0.658 and 0.695. As all the predictors may not meet the assumptions, we can expect  lesser accuracy on out of sample data. The out of sample accuracy was found to be slightly higher at  67.8%. So we will consider random Forest model for better accuracy.
+
+##Random Forest model fit
 ```{r,cache=TRUE}
 #Sys.time()
 #read from precomputed file, 
@@ -79,4 +88,22 @@ load("rfFit.precomputed")
 print(rfFit)
 confusionMatrix(predict(rfFit,newdata=tstset),tstset$classe)
 ```
+With random forest algorithm, there is danger of overfitting. In sample accuracy was found to be 98.9% with  3 sigma bounds  as 0.985 and 0.992. As we used  10 resamples instead of the usual 25 resamples to reduce the computation time, the overfitting effect may not be  very significant and expect accuracy similar to in sample accuracy. We found the out of sample accuracy as 0.999. More details on the important variables and plots are given below.  
 
+## Variable importance and plots
+```{r,cache=TRUE}
+head(varImp(rfFit$finalModel))
+qplot(pitch_belt,yaw_belt,data=trnset,col=trnset$classe,main="Sample scatter plot")
+```
+Important variables  are pitch_belt, yaw_belt. A sample scatter plot of these variables is shown, which indicates the clusters of the classes. 
+
+## Prediction on the validation set
+```{r,cache=TRUE}
+predict(rfFit,newdata=testing1)
+```
+The prediction had 100% accuracy when these were submitted as part of programming assignment.
+
+## References
+[1] Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
+
+Read more: http://groupware.les.inf.puc-rio.br/har#sbia_paper_section#ixzz3mkBE0rGJ
